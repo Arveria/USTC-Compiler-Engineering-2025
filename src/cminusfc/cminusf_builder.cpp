@@ -60,6 +60,39 @@ Value* CminusfBuilder::visit(ASTNum &node) {
 Value* CminusfBuilder::visit(ASTVarDeclaration &node) {
     // TODO: This function is empty now.
     // Add some code here.
+    // 根据类型确定对应的 IR 类型
+    Type *var_type = nullptr;
+    if (node.type == TYPE_INT) {
+        var_type = INT32_T;
+    } else if (node.type == TYPE_FLOAT) {
+        var_type = FLOAT_T;
+    }
+    
+    if (context.func == nullptr) {
+        // 全局变量声明
+        if (node.num == nullptr) {
+            // 普通全局变量，初始化为零
+            auto *global_var = GlobalVariable::create(node.id, module.get(), var_type, false, ConstantZero::get(var_type, module.get()));
+            scope.push(node.id, global_var);
+        } else {
+            // 全局数组，初始化为零
+            auto *array_type = ArrayType::get(var_type, node.num->i_val);
+            auto *global_var = GlobalVariable::create(node.id, module.get(), array_type, false, ConstantZero::get(array_type, module.get()));
+            scope.push(node.id, global_var);
+        }
+    } else {
+        // 局部变量声明
+        if (node.num == nullptr) {
+            // 普通局部变量，使用 alloca 分配栈空间
+            auto *alloca = builder->create_alloca(var_type);
+            scope.push(node.id, alloca);
+        } else {
+            // 局部数组，使用 alloca 分配栈空间
+            auto *array_type = ArrayType::get(var_type, node.num->i_val);
+            auto *alloca = builder->create_alloca(array_type);
+            scope.push(node.id, alloca);
+        }
+    }
     return nullptr;
 }
 
