@@ -164,17 +164,24 @@ Value* CminusfBuilder::visit(ASTCompoundStmt &node) {
     // You may need to add some code here
     // to deal with complex statements. 
 
+    // 进入新的作用域
+    scope.enter();
     
-    
+    // 处理局部声明
     for (auto &decl : node.local_declarations) {
         decl->accept(*this);
     }
 
+    // 处理语句列表，如果遇到已终止的基本块则停止
     for (auto &stmt : node.statement_list) {
         stmt->accept(*this);
-        if (builder->get_insert_block()->get_terminator() == nullptr)
+        if (builder->get_insert_block()->is_terminated()) {
             break;
+        }
     }
+    
+    // 退出作用域
+    scope.exit();
     return nullptr;
 }
 
