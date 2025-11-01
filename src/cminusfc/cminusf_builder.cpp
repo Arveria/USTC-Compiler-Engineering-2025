@@ -163,6 +163,8 @@ Value* CminusfBuilder::visit(ASTCompoundStmt &node) {
     // TODO: This function is not complete.
     // You may need to add some code here
     // to deal with complex statements. 
+
+    
     
     for (auto &decl : node.local_declarations) {
         decl->accept(*this);
@@ -225,6 +227,8 @@ Value* CminusfBuilder::visit(ASTSelectionStmt &node) {
 Value* CminusfBuilder::visit(ASTIterationStmt &node) {
     // TODO: This function is empty now.
     // Add some code here.
+
+    
     return nullptr;
 }
 
@@ -337,7 +341,69 @@ Value* CminusfBuilder::visit(ASTAssignExpression &node) {
 Value* CminusfBuilder::visit(ASTSimpleExpression &node) {
     // TODO: This function is empty now.
     // Add some code here.
-    return nullptr;
+    // 如果没有右操作数，直接返回左操作数
+    if (node.additive_expression_r == nullptr) {
+        return node.additive_expression_l->accept(*this);
+    }
+    
+    // 计算左右操作数
+    auto *l_val = node.additive_expression_l->accept(*this);
+    auto *r_val = node.additive_expression_r->accept(*this);
+    bool is_int = promote(&*builder, &l_val, &r_val);
+    
+    // 根据操作符生成相应的比较指令
+    Value *ret_val = nullptr;
+    switch (node.op) {
+    case OP_LE:
+        if (is_int) {
+            ret_val = builder->create_icmp_le(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_le(l_val, r_val);
+        }
+        break;
+    case OP_LT:
+        if (is_int) {
+            ret_val = builder->create_icmp_lt(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_lt(l_val, r_val);
+        }
+        break;
+    case OP_GT:
+        if (is_int) {
+            ret_val = builder->create_icmp_gt(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_gt(l_val, r_val);
+        }
+        break;
+    case OP_GE:
+        if (is_int) {
+            ret_val = builder->create_icmp_ge(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_ge(l_val, r_val);
+        }
+        break;
+    case OP_EQ:
+        if (is_int) {
+            ret_val = builder->create_icmp_eq(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_eq(l_val, r_val);
+        }
+        break;
+    case OP_NEQ:
+        if (is_int) {
+            ret_val = builder->create_icmp_ne(l_val, r_val);
+        } else {
+            ret_val = builder->create_fcmp_ne(l_val, r_val);
+        }
+        break;
+    }
+    
+    // 将比较结果从 i1 转换为 i32（因为 output 函数需要 i32 参数）
+    if (ret_val->get_type()->is_int1_type()) {
+        ret_val = builder->create_zext(ret_val, INT32_T);
+    }
+    
+    return ret_val;
 }
 
 Value* CminusfBuilder::visit(ASTAdditiveExpression &node) {
