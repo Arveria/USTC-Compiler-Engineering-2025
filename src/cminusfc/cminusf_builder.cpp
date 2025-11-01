@@ -228,6 +228,34 @@ Value* CminusfBuilder::visit(ASTIterationStmt &node) {
     // TODO: This function is empty now.
     // Add some code here.
 
+    // 创建 while 循环的三个基本块：条件检查、循环体、继续
+    auto *condBB = BasicBlock::create(module.get(), "", context.func);
+    auto *bodyBB = BasicBlock::create(module.get(), "", context.func);
+    auto *contBB = BasicBlock::create(module.get(), "", context.func);
+    
+    // 跳转到条件检查
+    builder->create_br(condBB);
+    
+    // 条件检查基本块
+    builder->set_insert_point(condBB);
+    auto *cond_val = node.expression->accept(*this);
+    Value *bool_cond = nullptr;
+    if (cond_val->get_type()->is_integer_type()) {
+        bool_cond = builder->create_icmp_ne(cond_val, CONST_INT(0));
+    } else {
+        bool_cond = builder->create_fcmp_ne(cond_val, CONST_FP(0.));
+    }
+    builder->create_cond_br(bool_cond, bodyBB, contBB);
+    
+    // 循环体基本块
+    builder->set_insert_point(bodyBB);
+    node.statement->accept(*this);
+    if (not builder->get_insert_block()->is_terminated()) {
+        builder->create_br(condBB);  // 跳回条件检查
+    }
+    
+    // 继续基本块
+    builder->set_insert_point(contBB);
     
     return nullptr;
 }
