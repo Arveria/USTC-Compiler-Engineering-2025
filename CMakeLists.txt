@@ -39,6 +39,7 @@ INCLUDE_DIRECTORIES(
     include/cminusfc
     include/common
     include/lightir
+    include/passes
     ${LLVM_INCLUDE_DIRS}
 )
 

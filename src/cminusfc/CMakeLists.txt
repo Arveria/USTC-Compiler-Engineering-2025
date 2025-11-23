@@ -9,7 +9,7 @@ target_link_libraries(
     IR_lib
     common
     syntax
-    stdc++fs
+    passes
 )
 
 install(

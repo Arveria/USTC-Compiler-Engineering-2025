@@ -41,6 +41,27 @@ class BasicBlock : public Value, public llvm::ilist_node<BasicBlock> {
     void add_instr_begin(Instruction *instr) { instr_list_.push_front(instr); }
     void erase_instr(Instruction *instr) { instr_list_.erase(instr); }
     void remove_instr(Instruction *instr) { instr_list_.remove(instr); }
+    void insert_before(const llvm::ilist<Instruction>::iterator &pos,
+                       Instruction *instr) {
+        // Insert the new instruction before the position node
+        instr_list_.insert(pos, instr);
+    }
+
+    void insert_before(Instruction *pos, Instruction *instr) {
+        auto it = instr_list_.begin();
+        for (; it != instr_list_.end(); ++it) {
+            if (&*it == pos) {
+                break;
+            }
+        }
+        if (it != instr_list_.end()) {
+            instr_list_.insert(it, instr);
+        }
+    }
+    void reset(){
+        pre_bbs_.clear();
+        succ_bbs_.clear();
+    }
 
     llvm::ilist<Instruction> &get_instructions() { return instr_list_; }
     bool empty() const { return instr_list_.empty(); }

@@ -109,8 +109,11 @@ class Instruction : public User, public llvm::ilist_node<Instruction> {
 
     bool isTerminator() const { return is_br() || is_ret(); }
 
-  private:
+    virtual Instruction *clone(BasicBlock *) const = 0;
+
     OpID op_id_;
+
+  private:
     BasicBlock *parent_;
 };
 
@@ -137,6 +140,9 @@ class IBinaryInst : public BaseInst<IBinaryInst> {
     static IBinaryInst *create_sdiv(Value *v1, Value *v2, BasicBlock *bb);
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override {
+        return new IBinaryInst(op_id_, get_operand(0), get_operand(1), prt);
+    }
 };
 
 class FBinaryInst : public BaseInst<FBinaryInst> {
@@ -152,6 +158,7 @@ class FBinaryInst : public BaseInst<FBinaryInst> {
     static FBinaryInst *create_fdiv(Value *v1, Value *v2, BasicBlock *bb);
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class ICmpInst : public BaseInst<ICmpInst> {
@@ -169,6 +176,7 @@ class ICmpInst : public BaseInst<ICmpInst> {
     static ICmpInst *create_ne(Value *v1, Value *v2, BasicBlock *bb);
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class FCmpInst : public BaseInst<FCmpInst> {
@@ -186,20 +194,30 @@ class FCmpInst : public BaseInst<FCmpInst> {
     static FCmpInst *create_fne(Value *v1, Value *v2, BasicBlock *bb);
 
     virtual std::string print() override;
+
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class CallInst : public BaseInst<CallInst> {
     friend BaseInst<CallInst>;
 
-  protected:
+//   protected:
+public:
     CallInst(Function *func, std::vector<Value *> args, BasicBlock *bb);
 
-  public:
     static CallInst *create_call(Function *func, std::vector<Value *> args,
                                  BasicBlock *bb);
     FunctionType *get_function_type() const;
 
     virtual std::string print() override;
+    Function *func_;
+    Instruction *clone(BasicBlock *prt) const override {
+            if(get_operands().size() == 1){
+                return new CallInst(func_, {}, prt);
+            }
+        return new CallInst(
+            func_, {get_operands().begin() + 1, get_operands().end()}, prt);
+    }
 };
 
 class BranchInst : public BaseInst<BranchInst> {
@@ -220,6 +238,14 @@ class BranchInst : public BaseInst<BranchInst> {
     Value *get_condition() const { return get_operand(0); }
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override {
+        if (is_cond_br())
+            return new BranchInst(this->get_operand(0),
+                                  (BasicBlock *)(get_operand(1)),
+                                  (BasicBlock *)(get_operand(2)), prt);
+        return new BranchInst(nullptr, (BasicBlock *)(get_operand(0)), nullptr,
+                              prt);
+    }
 };
 
 class ReturnInst : public BaseInst<ReturnInst> {
@@ -234,6 +260,7 @@ class ReturnInst : public BaseInst<ReturnInst> {
     bool is_void_ret() const;
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class GetElementPtrInst : public BaseInst<GetElementPtrInst> {
@@ -249,6 +276,9 @@ class GetElementPtrInst : public BaseInst<GetElementPtrInst> {
     Type *get_element_type() const;
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override{
+  return new GetElementPtrInst(get_operand(0), {get_operands().begin() + 1, get_operands().end()}, prt);
+}
 };
 
 class StoreInst : public BaseInst<StoreInst> {
@@ -262,7 +292,7 @@ class StoreInst : public BaseInst<StoreInst> {
 
     Value *get_rval() { return this->get_operand(0); }
     Value *get_lval() { return this->get_operand(1); }
-
+    Instruction *clone(BasicBlock *prt) const override;
     virtual std::string print() override;
 };
 
@@ -279,6 +309,7 @@ class LoadInst : public BaseInst<LoadInst> {
     Type *get_load_type() const { return get_type(); };
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class AllocaInst : public BaseInst<AllocaInst> {
@@ -293,7 +324,7 @@ class AllocaInst : public BaseInst<AllocaInst> {
     Type *get_alloca_type() const {
         return get_type()->get_pointer_element_type();
     };
-
+    Instruction *clone(BasicBlock *prt) const override;
     virtual std::string print() override;
 };
 
@@ -310,6 +341,7 @@ class ZextInst : public BaseInst<ZextInst> {
     Type *get_dest_type() const { return get_type(); };
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class FpToSiInst : public BaseInst<FpToSiInst> {
@@ -325,6 +357,7 @@ class FpToSiInst : public BaseInst<FpToSiInst> {
     Type *get_dest_type() const { return get_type(); };
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class SiToFpInst : public BaseInst<SiToFpInst> {
@@ -339,6 +372,7 @@ class SiToFpInst : public BaseInst<SiToFpInst> {
     Type *get_dest_type() const { return get_type(); };
 
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };
 
 class PhiInst : public BaseInst<PhiInst> {
@@ -357,6 +391,17 @@ class PhiInst : public BaseInst<PhiInst> {
         this->add_operand(val);
         this->add_operand(pre_bb);
     }
+
+    void remove_phi_operand(Value *pre_bb) {
+        for (unsigned i = 0; i < this->get_num_operand(); i += 2) {
+            if (this->get_operand(i + 1) == pre_bb) {
+                this->remove_operand(i);
+                this->remove_operand(i);
+                return;
+            }
+        }
+    }
+
     std::vector<std::pair<Value *, BasicBlock *>> get_phi_pairs() {
         std::vector<std::pair<Value *, BasicBlock *>> res;
         for (size_t i = 0; i < get_num_operand(); i += 2) {
@@ -366,4 +411,5 @@ class PhiInst : public BaseInst<PhiInst> {
         return res;
     }
     virtual std::string print() override;
+    Instruction *clone(BasicBlock *prt) const override;
 };

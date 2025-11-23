@@ -1,6 +1,13 @@
+
 #include "Module.hpp"
+#include "PassManager.hpp"
 #include "ast.hpp"
 #include "cminusf_builder.hpp"
+#include "PassManager.hpp"
+#include "DeadCode.hpp"
+#include "Mem2Reg.hpp"
+#include "ConstPropagation.hpp"
+#include "FunctionInline.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -17,6 +24,10 @@ struct Config {
 
     bool emitast{false};
     bool emitllvm{false};
+    // optization config
+    bool const_prop{false};
+    bool dce{false};
+    bool func_inline{false};
 
     Config(int argc, char **argv) : argc(argc), argv(argv) {
         parse_cmd_line();
@@ -49,15 +60,33 @@ int main(int argc, char **argv) {
         ast.run_visitor(builder);
         m = builder.getModule();
 
+        PassManager PM(m.get());
+        // optimization 
+        if(config.dce) {
+            PM.add_pass<Mem2Reg>();
+            PM.add_pass<DeadCode>();
+        }
+
+        if(config.func_inline) {
+            PM.add_pass<FunctionInline>();
+            PM.add_pass<DeadCode>();
+        }
+
+        if(config.const_prop) {
+            PM.add_pass<Mem2Reg>();
+            PM.add_pass<DeadCode>();
+            PM.add_pass<ConstPropagation>();
+            PM.add_pass<DeadCode>();
+        }
+        PM.run();
+
         std::ofstream output_stream(config.output_file);
         if (config.emitllvm) {
             auto abs_path = std::filesystem::canonical(config.input_file);
             output_stream << "; ModuleID = 'cminus'\n";
             output_stream << "source_filename = " << abs_path << "\n\n";
             output_stream << m->print();
-        }
-
-        // TODO: lab3 lab4 (IR optimization or codegen)
+        } 
     }
 
     return 0;
@@ -79,6 +108,12 @@ void Config::parse_cmd_line() {
             emitast = true;
         } else if (argv[i] == "-emit-llvm"s) {
             emitllvm = true;
+        } else if (argv[i] == "-dce"s) {
+            dce = true;
+        } else if (argv[i] == "-const-prop"s) {
+            const_prop = true;
+        } else if (argv[i] == "-func-inline"s) {
+            func_inline = true;
         } else {
             if (input_file.empty()) {
                 input_file = argv[i];
@@ -98,14 +133,24 @@ void Config::check() {
     if (input_file.extension() != ".cminus") {
         print_err("file format not recognized");
     }
+    if (const_prop && not dce) {
+        print_err("const-prop pass need dce pass");
+    }
+    if (func_inline && not dce) {
+        print_err("function inline pass need dce pass");
+    }
     if (output_file.empty()) {
         output_file = input_file.stem();
+        if (emitllvm) {
+            output_file.replace_extension(".ll");
+        }
     }
 }
 
 void Config::print_help() const {
     std::cout << "Usage: " << exe_name
-              << " [-h|--help] [-o <target-file>] [-mem2reg] [-emit-llvm] [-S] "
+              << " [-h|--help] [-o <target-file>] [-emit-llvm] [-S] [-dump-json]"
+                 "[-const-prop] [-dce]"
                  "<input-file>"
               << std::endl;
     exit(0);

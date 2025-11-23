@@ -47,6 +47,38 @@ class Function : public Value, public llvm::ilist_node<Function> {
     void set_instr_name();
     std::string print();
 
+    void reset_bbs(){
+    for(auto &bb: basic_blocks_){
+        bb.reset();
+    }
+    for(auto &bb : basic_blocks_){
+        auto inst = &((bb.get_instructions().back()));
+            if(inst->is_br()){
+                auto br = static_cast<BranchInst*>(inst);
+                if(br->is_cond_br()){
+                    auto true_bb = static_cast<BasicBlock*>(br->get_operand(1));
+                    auto false_bb = static_cast<BasicBlock*>(br->get_operand(2));
+                    assert(true_bb->get_parent() == this);
+                    assert(false_bb->get_parent() == this);
+                    bb.add_succ_basic_block(true_bb);
+                    bb.add_succ_basic_block(false_bb);
+                    true_bb->add_pre_basic_block(&bb);
+                    false_bb->add_pre_basic_block(&bb);
+                }
+                else{
+                    auto succ_bb = static_cast<BasicBlock*>(br->get_operand(0));
+                    assert(succ_bb->get_parent() == this);
+                    bb.add_succ_basic_block(succ_bb);
+                    succ_bb->add_pre_basic_block(&bb);
+                }
+            }
+            // else{
+            //     std::cout << print();
+            // }
+        
+    }
+}
+
   private:
     llvm::ilist<BasicBlock> basic_blocks_;
     std::list<Argument> arguments_;
