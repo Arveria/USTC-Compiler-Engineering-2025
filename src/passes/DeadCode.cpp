@@ -13,9 +13,29 @@ void DeadCode::run() {
         changed = false;
         for (auto &F : m_->get_functions()) {
             auto func = &F;
-            changed |= clear_basic_blocks(func);
+            if (func->is_declaration()) {
+                continue;
+            }
+            std::cerr << "DCE: Processing function: " << func->get_name() << std::endl;
+            // 打印Mem2Reg后的IR状态
+            for (auto &bb : func->get_basic_blocks()) {
+                for (auto &ins : bb.get_instructions()) {
+                    if (ins.is_call()) {
+                        auto call_inst = dynamic_cast<CallInst *>(&ins);
+                        if (call_inst) {
+                            auto func_val = call_inst->get_operand(0);
+                            auto called_func = dynamic_cast<Function *>(func_val);
+                            if (called_func) {
+                                std::cerr << "DCE: Found call to " << called_func->get_name() 
+                                         << " (is_declaration=" << called_func->is_declaration() << ")" << std::endl;
+                            }
+                        }
+                    }
+                }
+            }
             mark(func);
             changed |= sweep(func);
+            changed |= clear_basic_blocks(func);
         }
     } while (changed);
     LOG_INFO << "dead code pass erased " << ins_count << " instructions";
