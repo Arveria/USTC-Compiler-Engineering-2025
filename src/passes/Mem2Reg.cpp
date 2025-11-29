@@ -88,8 +88,12 @@ void Mem2Reg::rename(BasicBlock *bb) {
     // 出的地址空间
     for (auto &instr : bb->get_instructions()) {
         if (instr.is_phi()) {
-            auto l_val = phi_lval.at(static_cast<PhiInst *>(&instr));
-            var_val_stack[l_val].push_back(&instr);
+            auto phi_inst = static_cast<PhiInst *>(&instr);
+            // 检查phi指令是否在映射中（可能在ConstPropagation等优化后被删除）
+            if (phi_lval.find(phi_inst) != phi_lval.end()) {
+                auto l_val = phi_lval.at(phi_inst);
+                var_val_stack[l_val].push_back(&instr);
+            }
         }
     }
 
